@@ -22,7 +22,19 @@
     { id: 'c5', nome: 'Beira do Rio',     naRota: true },
     { id: 'c6', nome: 'Serra Alta',       naRota: false }
   ];
+// Perfis de coordenação e quais comunidades cada um pode acessar ('*' = todas)
+  const COORDENADORES = [
+    { pin: '1010', nome: 'Dra. Helena (Coordenação Geral)', comunidades: ['*'] },
+    { pin: '2020', nome: 'Enf. Carlos (Regional Norte)',    comunidades: ['c1', 'c2', 'c3'] },
+    { pin: '3030', nome: 'Enf. Mariana (Regional Sul)',     comunidades: ['c4', 'c5', 'c6'] }
+  ];
 
+  // Guarda o coordenador logado na sessão atual (ao fechar a aba, bloqueia de novo)
+  let coordenadorAtivo = null;
+  try {
+    const salvo = sessionStorage.getItem('rota-saude:coord');
+    if (salvo) coordenadorAtivo = JSON.parse(salvo);
+  } catch (e) { /* ignora */ }
   /* ========== ARMAZENAMENTO (localStorage) ==========
      Os dados ficam salvos neste navegador e sobrevivem ao recarregar a página.
      Cada demanda tem o campo "sincronizada": false = ainda não enviada ao servidor.
@@ -535,15 +547,87 @@
     return cartao;
   }
 
+  function atualizarTelaCoordenacao() {
+    const bloqueio = $('#bloqueio-coord');
+    const painel = $('#painel-coord');
+
+    if (!coordenadorAtivo) {
+      bloqueio.hidden = false;
+      painel.hidden = true;
+      return;
+    }
+
+    bloqueio.hidden = true;
+    painel.hidden = false;
+    $('#info-coordenador').textContent = coordenadorAtivo.nome;
+    renderCoordenacao();
+  }
+
   function renderCoordenacao() {
-    const rota = COMUNIDADES.filter(function (c) { return c.naRota; });
+    if (!coordenadorAtivo) return;
+
+    // Filtra apenas comunidades na rota E permitidas para este coordenador
+    const permitidas = coordenadorAtivo.comunidades;
+    const rota = COMUNIDADES.filter(function (c) {
+      const temPermissao = permitidas.includes('*') || permitidas.includes(c.id);
+      return c.naRota && temPermissao;
+    });
+
+    $('#subtitulo-coord').textContent = permitidas.includes('*')
+      ? 'Exibindo todas as comunidades da próxima rota.'
+      : 'Exibindo apenas as comunidades sob sua responsabilidade (' + rota.length + ').';
+
     renderResumo(rota);
     const lista = $('#lista-comunidades');
     lista.textContent = '';
-    rota.forEach(function (c) { lista.appendChild(criarCartao(c)); });
+
+    if (!rota.length) {
+      lista.appendChild(el('p', { class: 'vazio', text: 'Nenhuma comunidade sob sua responsabilidade está na próxima rota.' }));
+    } else {
+      rota.forEach(function (c) { lista.appendChild(criarCartao(c)); });
+    }
     atualizarAjudaComunidade();
   }
 
+  // Eventos de autenticação e bloqueio da aba Coordenação
+  const formLoginCoord = $('#form-login-coord');
+  if (formLoginCoord) {
+    formLoginCoord.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const inputPin = $('#pin-coord');
+      const erroPin = $('#erro-pin');
+      const pinDigitado = inputPin.value.trim();
+
+      const encontrado = COORDENADORES.find(function (c) { return c.pin === pinDigitado; });
+      if (!encontrado) {
+        erroPin.textContent = 'Código inválido. Verifique seu PIN de coordenação.';
+        erroPin.hidden = false;
+        inputPin.closest('.campo').classList.add('invalido');
+        inputPin.focus();
+        return;
+      }
+
+      erroPin.hidden = true;
+      inputPin.closest('.campo').classList.remove('invalido');
+      inputPin.value = '';
+      coordenadorAtivo = encontrado;
+      try { sessionStorage.setItem('rota-saude:coord', JSON.stringify(encontrado)); } catch (err) { /* ignora */ }
+
+      atualizarTelaCoordenacao();
+      avisar('Acesso liberado: ' + encontrado.nome);
+    });
+  }
+
+  const btnSairCoord = $('#btn-sair-coord');
+  if (btnSairCoord) {
+    btnSairCoord.addEventListener('click', function () {
+      coordenadorAtivo = null;
+      try { sessionStorage.removeItem('rota-saude:coord'); } catch (err) { /* ignora */ }
+      atualizarTelaCoordenacao();
+      avisar('Aba de coordenação bloqueada.');
+    });
+  }
+  
   // Marcar como atendida / desfazer, sem recarregar a página
   $('#lista-comunidades').addEventListener('click', function (e) {
     const botao = e.target.closest('button[data-acao]');

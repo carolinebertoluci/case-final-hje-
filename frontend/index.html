@@ -92,10 +92,40 @@
 
     <!-- TELA DA COORDENAÇÃO -->
     <section id="tela-coord" role="tabpanel" aria-labelledby="aba-coord" hidden>
-      <h2>Próxima rota</h2>
-      <p class="intro">Demandas que ainda aguardam atendimento, por comunidade.</p>
-      <div id="resumo-rota" class="resumo-rota"></div>
-      <div id="lista-comunidades" class="lista-comunidades"></div>
+
+      <!-- 1. TELA DE BLOQUEIO (Aparece quando não há coordenador autenticado) -->
+      <div id="bloqueio-coord" class="bloqueio-coord">
+        <h2>Acesso restrito à Coordenação</h2>
+        <p class="intro">Digite seu código de acesso para visualizar as demandas e gerenciar a rota das suas comunidades.</p>
+
+        <form id="form-login-coord" class="form-login" novalidate>
+          <div class="campo">
+            <label for="pin-coord">Código de acesso (PIN) <span class="obrig">*</span></label>
+            <input type="password" id="pin-coord" name="pin" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="Ex: 1234" aria-describedby="ajuda-pin erro-pin">
+            <p class="ajuda" id="ajuda-pin">Digite o código de acesso fornecido pela coordenação.</p>
+            <p class="erro" id="erro-pin" hidden></p>
+          </div>
+          <button type="submit" class="botao-principal">Liberar acesso</button>
+        </form>
+      </div>
+
+      <!-- 2. PAINEL LIBERADO (Aparece após autenticar) -->
+      <div id="painel-coord" hidden>
+        <div class="cabecalho-coord">
+          <div>
+            <h2>Próxima rota</h2>
+            <p class="intro" id="subtitulo-coord">Demandas que ainda aguardam atendimento, por comunidade.</p>
+          </div>
+          <div class="sessao-coord">
+            <span id="info-coordenador" class="badge-coord"></span>
+            <button type="button" id="btn-sair-coord" class="botao-desfazer">Bloquear aba</button>
+          </div>
+        </div>
+
+        <div id="resumo-rota" class="resumo-rota"></div>
+        <div id="lista-comunidades" class="lista-comunidades"></div>
+      </div>
+
     </section>
 
   </main>

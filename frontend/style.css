@@ -473,3 +473,37 @@ summary:hover { color: var(--petroleo-900); }
   body { background: #fff; }
   .comunidade { break-inside: avoid; box-shadow: none; }
 }
+
+/* ----- controle de acesso (coordenação) ----- */
+input[type="password"] {
+  width: 100%; min-height: 3.1rem;
+  font: inherit; color: inherit; letter-spacing: .2em; font-weight: 700;
+  padding: .7rem .95rem;
+  background: #f8fbfb;
+  border: 2px solid #b4c6ca;
+  border-radius: 12px;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+input[type="password"]:focus {
+  outline: none; background: #fff;
+  border-color: var(--primaria);
+  box-shadow: 0 0 0 4px rgba(14, 117, 129, .2);
+}
+
+.form-login { max-width: 30rem; }
+
+.cabecalho-coord {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start;
+  gap: 1rem; margin-bottom: 1.5rem;
+}
+.cabecalho-coord .intro { margin-bottom: 0; }
+
+.sessao-coord {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .75rem;
+}
+.badge-coord {
+  font-size: .92rem; font-weight: 700;
+  color: var(--petroleo-700); background: var(--primaria-clara);
+  padding: .45rem .9rem; border-radius: 999px;
+  border: 1px solid rgba(14, 117, 129, .25);
+}
