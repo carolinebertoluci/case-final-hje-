@@ -130,16 +130,13 @@ def listar_comunidades():
 def registrar_demanda():
   dados = request.get_json(silent=True) or {}
 
-  comunidade_id = dados.get('comunidade_id')
-  tipo = dados.get('tipo')
-  prioridade = dados.get('prioridade')
+  comunidade_id = (dados.get('comunidade_id') or '').strip()
+  tipo = (dados.get('tipo') or '').strip()
+  prioridade = (dados.get('prioridade') or '').strip()
   nome = (dados.get('nome') or '').strip()
   nascimento = (dados.get('nascimento') or '').strip()
   cartao_sus = (dados.get('cartao_sus') or '').strip()
-
-  # Estratégia escolhida quando a comunidade está na seca:
-  # 'rota' (padrão), 'polo' (redireciona para comunidade polo) ou 'contingencia' (teleconsulta/fila seca)
-  estrategia_seca = dados.get('estrategia_seca', 'rota')
+  estrategia_seca = (dados.get('estrategia_seca') or 'rota').strip()
 
   if not all([comunidade_id, tipo, prioridade, nome, nascimento]):
     return jsonify({'erro': 'Campos obrigatórios ausentes.'}), 400
@@ -160,52 +157,38 @@ def registrar_demanda():
   comunidade_destino_id = comunidade_id
   modalidade = 'rota'
 
-  # Regra de negócio da seca:
   if comunidade['inacessivel_seca']:
     if estrategia_seca == 'rota':
-      # Mantém o bloqueio 422 caso tentem agendar rota fluvial direta sem plano de contingência
       polo = buscar_comunidade(comunidade['polo_alternativo_id'])
       nome_polo = polo['nome'] if polo else 'um polo próximo'
       return (
           jsonify({
               'erro': (
-                  f"{comunidade['nome']} está inacessível na seca. Escolha"
-                  f' redirecionar para o polo ({nome_polo}) ou registrar em'
-                  ' contingência.'
-              ),
-              'polo_sugerido': polo,
+                  f"{comunidade['nome']} está inacessível na seca. Redirecione"
+                  f' para o polo ({nome_polo}) ou registre em contingência.'
+              )
           }),
           422,
       )
-
     elif estrategia_seca == 'polo':
       polo = buscar_comunidade(comunidade['polo_alternativo_id'])
       if not polo or polo['inacessivel_seca']:
-        return (
-            jsonify(
-                {'erro': 'Nenhum polo acessível disponível para esta comunidade.'}
-            ),
-            422,
-        )
+        return jsonify({'erro': 'Nenhum polo acessível disponível.'}), 422
       comunidade_destino_id = polo['id']
       modalidade = 'polo'
-
     elif estrategia_seca == 'contingencia':
       modalidade = (
           'teleconsulta_urgente'
           if prioridade == 'prioritaria'
           else 'fila_seca'
       )
-
     else:
       return jsonify({'erro': 'Estratégia de seca inválida.'}), 400
 
   nova_demanda = {
       'id': f'd-{uuid.uuid4().hex[:8]}',
-      'comunidade_id': comunidade_destino_id,  # Onde será atendida
-      'comunidade_origem_id': (
-          comunidade_id
-      ),  # Onde o paciente realmente mora
+      'comunidade_id': comunidade_destino_id,
+      'comunidade_origem_id': comunidade_id,
       'modalidade': modalidade,
       'tipo': tipo,
       'prioridade': prioridade,
@@ -216,55 +199,16 @@ def registrar_demanda():
       'criada_em': datetime.now().isoformat(timespec='seconds'),
   }
   DEMANDAS.append(nova_demanda)
-  return jsonify(nova_demanda), 201
 
-
-@app.get('/api/comunidades/<comunidade_id>/resumo')
-def resumo_comunidade(comunidade_id):
-  comunidade = buscar_comunidade(comunidade_id)
-  if not comunidade:
-    return jsonify({'erro': 'Comunidade não encontrada.'}), 404
-
-  abertas = [
-      d
-      for d in DEMANDAS
-      if d['comunidade_id'] == comunidade_id and not d['atendida']
-  ]
-
-  por_tipo = {}
-  for t in sorted(TIPOS_VALIDOS):
-    do_tipo = [d for d in abertas if d['tipo'] == t]
-    por_tipo[t] = {
-        'total': len(do_tipo),
-        'prioritarias': sum(
-            1 for d in do_tipo if d['prioridade'] == 'prioritaria'
-        ),
-        'rotina': sum(1 for d in do_tipo if d['prioridade'] == 'rotina'),
-    }
-
-  # Resumo estritamente agregado (zero nomes de pacientes)
+  # Devolve apenas o que a tela precisa para exibir a confirmação
   return (
       jsonify({
-          'comunidade_id': comunidade['id'],
-          'comunidade_nome': comunidade['nome'],
-          'proxima_visita': comunidade['proxima_visita'],
-          'inacessivel_seca': comunidade['inacessivel_seca'],
-          'total_abertas': len(abertas),
-          'total_prioritarias': sum(
-              1 for d in abertas if d['prioridade'] == 'prioritaria'
-          ),
-          'contingencia_urgente': sum(
-              1 for d in abertas if d['modalidade'] == 'teleconsulta_urgente'
-          ),
-          'fila_seca': sum(
-              1 for d in abertas if d['modalidade'] == 'fila_seca'
-          ),
-          'redirecionadas_polo': sum(
-              1 for d in abertas if d['modalidade'] == 'polo'
-          ),
-          'por_tipo': por_tipo,
+          'id': nova_demanda['id'],
+          'comunidade_id': nova_demanda['comunidade_id'],
+          'modalidade': nova_demanda['modalidade'],
+          'nome': nova_demanda['nome'],
       }),
-      200,
+      201,
   )
 
 
@@ -272,10 +216,24 @@ def resumo_comunidade(comunidade_id):
 def listar_demandas_comunidade(comunidade_id):
   if not buscar_comunidade(comunidade_id):
     return jsonify({'erro': 'Comunidade não encontrada.'}), 404
-  return (
-      jsonify([d for d in DEMANDAS if d['comunidade_id'] == comunidade_id]),
-      200,
-  )
+
+  # Projeção de campos: não envia cartao_sus nem criada_em para a tela
+  lista = [
+      {
+          'id': d['id'],
+          'comunidade_id': d['comunidade_id'],
+          'comunidade_origem_id': d['comunidade_origem_id'],
+          'modalidade': d['modalidade'],
+          'tipo': d['tipo'],
+          'prioridade': d['prioridade'],
+          'nome': d['nome'],
+          'nascimento': d['nascimento'],
+          'atendida': d['atendida'],
+      }
+      for d in DEMANDAS
+      if d['comunidade_id'] == comunidade_id
+  ]
+  return jsonify(lista), 200
 
 
 @app.patch('/api/demandas/<demanda_id>/atendida')
@@ -291,7 +249,16 @@ def marcar_atendida(demanda_id):
 
   demanda['atendida'] = True
   demanda['atendida_em'] = datetime.now().isoformat(timespec='seconds')
-  return jsonify(demanda), 200
+
+  # Devolve apenas id, nome e status atualizado
+  return (
+      jsonify({
+          'id': demanda['id'],
+          'nome': demanda['nome'],
+          'atendida': demanda['atendida'],
+      }),
+      200,
+  )
 
 
 if __name__ == '__main__':

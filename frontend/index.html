@@ -32,7 +32,7 @@
       <form id="form-demanda" novalidate>
         <div class="campo">
           <label for="comunidade">Comunidade <span class="obrig">*</span></label>
-          <select id="comunidade" name="comunidade">
+          <select id="comunidade" name="comunidade" required>
             <option value="">Selecione a comunidade…</option>
           </select>
           <p class="ajuda" id="ajuda-comunidade"></p>
@@ -49,11 +49,11 @@
           <legend>Prioridade <span class="obrig">*</span></legend>
           <div class="opcoes opcoes-prioridade">
             <label class="opcao">
-              <input type="radio" name="prioridade" value="rotina">
+              <input type="radio" name="prioridade" value="rotina" required>
               <span><strong>Rotina</strong><small>Pode aguardar a agenda normal</small></span>
             </label>
             <label class="opcao opcao-prio">
-              <input type="radio" name="prioridade" value="prioritaria">
+              <input type="radio" name="prioridade" value="prioritaria" required>
               <span><strong>Prioritária</strong><small>Precisa ser atendida primeiro</small></span>
             </label>
           </div>
@@ -64,14 +64,14 @@
           <legend>Identificação do paciente</legend>
           <div class="campo">
             <label for="nome">Nome completo <span class="obrig">*</span></label>
-            <input type="text" id="nome" name="nome" autocomplete="off">
+            <input type="text" id="nome" name="nome" autocomplete="off" required>
             <p class="erro" id="erro-nome" hidden></p>
           </div>
 
           <div class="linha">
             <div class="campo">
               <label for="nascimento">Data de nascimento <span class="obrig">*</span></label>
-              <input type="date" id="nascimento" name="nascimento">
+              <input type="date" id="nascimento" name="nascimento" required>
               <p class="erro" id="erro-nascimento" hidden></p>
             </div>
             <div class="campo">
@@ -129,7 +129,7 @@
         <form id="form-login-coord" class="form-login" novalidate>
           <div class="campo">
             <label for="pin-coord">Código de acesso (PIN) <span class="obrig">*</span></label>
-            <input type="password" id="pin-coord" name="pin" inputmode="numeric" maxlength="6" placeholder="Código">
+            <input type="password" id="pin-coord" name="pin" inputmode="numeric" maxlength="6" placeholder="Código" required>
             <p class="ajuda">O PIN é fornecido pela coordenação do programa.</p>
             <p class="erro" id="erro-pin" hidden></p>
           </div>

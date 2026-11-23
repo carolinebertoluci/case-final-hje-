@@ -13,7 +13,6 @@
     { id: 'retorno',   rotulo: 'Retorno' }
   ];
 
-  // Controle de acesso por perfil (PIN -> comunidades permitidas)
   const COORDENADORES = [
     { pin: '1010', nome: 'Dra. Helena (Coordenação Geral)', comunidades: ['*'] },
     { pin: '2020', nome: 'Enf. Carlos (Regional Norte)',    comunidades: ['c1', 'c2', 'c3'] },
@@ -27,7 +26,26 @@
   let coordenadorAtivo = JSON.parse(sessionStorage.getItem('rota-saude:coord') || 'null');
   const abertas = new Set();
 
-  /* ==================== 3. UTILITÁRIOS ==================== */
+  /* ==================== 3. UTILITÁRIOS DOM (createElement) ==================== */
+  function criarEl(tag, props, filhos) {
+    const el = document.createElement(tag);
+    if (props) {
+      Object.entries(props).forEach(([chave, valor]) => {
+        if (chave === 'className') el.className = valor;
+        else if (chave === 'textContent') el.textContent = valor;
+        else if (chave.startsWith('data-')) el.setAttribute(chave, valor);
+        else el[chave] = valor;
+      });
+    }
+    if (filhos) {
+      filhos.forEach((f) => {
+        if (f == null) return;
+        el.appendChild(typeof f === 'string' ? document.createTextNode(f) : f);
+      });
+    }
+    return el;
+  }
+
   const rotuloTipo = (id) => TIPOS.find((t) => t.id === id)?.rotulo || id;
   const buscarComunidade = (id) => comunidades.find((c) => c.id === id);
   const formatarDataBR = (iso) => (iso ? iso.split('-').reverse().join('/') : 'Sem data prevista');
@@ -71,30 +89,30 @@
   const form = $('#form-demanda');
   const selComunidade = $('#comunidade');
 
-  $('#opcoes-tipo').innerHTML = TIPOS.map((t) => `
-    <label class="opcao">
-      <input type="radio" name="tipo" value="${t.id}">
-      <span><strong>${t.rotulo}</strong></span>
-    </label>
-  `).join('');
+  // Monta opções de tipo via createElement()
+  const boxTipos = $('#opcoes-tipo');
+  TIPOS.forEach((t, idx) => {
+    const input = criarEl('input', { type: 'radio', name: 'tipo', value: t.id, required: idx === 0 });
+    const span = criarEl('span', null, [criarEl('strong', { textContent: t.rotulo })]);
+    boxTipos.appendChild(criarEl('label', { className: 'opcao' }, [input, span]));
+  });
 
-  // Carrega comunidades do GET /api/comunidades
   async function carregarComunidades() {
     try {
       const resp = await fetch(`${API_URL}/comunidades`);
       comunidades = await resp.json();
 
-      selComunidade.innerHTML = '<option value="">Selecione a comunidade…</option>';
+      selComunidade.textContent = '';
+      selComunidade.appendChild(criarEl('option', { value: '', textContent: 'Selecione a comunidade…' }));
       comunidades.forEach((c) => {
         const avisoSeca = c.inacessivel_seca ? ' [INACESSÍVEL NA SECA]' : '';
-        selComunidade.add(new Option(`${c.nome}${avisoSeca}`, c.id));
+        selComunidade.appendChild(criarEl('option', { value: c.id, textContent: `${c.nome}${avisoSeca}` }));
       });
     } catch (err) {
-      avisar('Erro ao conectar com o servidor Flask (verifique se app.py está rodando).');
+      avisar('Erro ao conectar com o servidor Flask.');
     }
   }
 
-  // Mostra data da próxima visita ou alerta de seca ao selecionar comunidade
   function atualizarAjudaComunidade() {
     const c = buscarComunidade(selComunidade.value);
     const ajuda = $('#ajuda-comunidade');
@@ -103,7 +121,7 @@
     if (c.inacessivel_seca) {
       const polo = buscarComunidade(c.polo_alternativo_id);
       const txtPolo = polo ? ` (Polo de apoio: ${polo.nome})` : '';
-      ajuda.textContent = `Atenção: ${c.nome} está isolada na seca${txtPolo}. Você escolherá o plano de atendimento na revisão.`;
+      ajuda.textContent = `Atenção: ${c.nome} está isolada na seca${txtPolo}. Você escolherá o plano na revisão.`;
     } else {
       ajuda.textContent = `Próxima visita prevista: ${formatarDataBR(c.proxima_visita)}.`;
     }
@@ -137,27 +155,30 @@
     marcar('cartaoSus', v.cartao_sus && v.cartao_sus.length !== 15 ? 'O Cartão SUS deve ter exatamente 15 números.' : '');
 
     const boxErros = $('#resumo-erros');
+    boxErros.textContent = '';
     boxErros.hidden = erros.length === 0;
-    boxErros.innerHTML = erros.length
-      ? `<p>Corrija ${erros.length} item(ns) antes de continuar:</p><ul>${erros.map((e) => `<li>${e}</li>`).join('')}</ul>`
-      : '';
+
+    if (erros.length) {
+      boxErros.appendChild(criarEl('p', { textContent: `Corrija ${erros.length} item(ns) antes de continuar:` }));
+      const ul = criarEl('ul', null, erros.map((msg) => criarEl('li', { textContent: msg })));
+      boxErros.appendChild(ul);
+    }
 
     return erros.length === 0;
   }
 
-  // Etapa 1: Valida, abre revisão e exibe opções de contingência se a comunidade estiver na seca
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     $('#confirmacao').hidden = true;
 
     const fd = new FormData(form);
     const dados = {
-      comunidade_id: fd.get('comunidade') || '',
-      tipo: fd.get('tipo') || '',
-      prioridade: fd.get('prioridade') || '',
+      comunidade_id: (fd.get('comunidade') || '').trim(),
+      tipo: (fd.get('tipo') || '').trim(),
+      prioridade: (fd.get('prioridade') || '').trim(),
       nome: (fd.get('nome') || '').replace(/\s+/g, ' ').trim(),
-      nascimento: fd.get('nascimento') || '',
-      cartao_sus: (fd.get('cartaoSus') || '').replace(/\D/g, '')
+      nascimento: (fd.get('nascimento') || '').trim(),
+      cartao_sus: (fd.get('cartaoSus') || '').replace(/\D/g, '').trim()
     };
 
     if (!validarFormulario(dados)) {
@@ -171,29 +192,30 @@
       ? dados.cartao_sus.replace(/(\d{3})(\d{4})(\d{4})(\d{4})/, '$1 $2 $3 $4')
       : 'Não informado';
 
-    $('#lista-revisao').innerHTML = `
-      <dt>Comunidade</dt><dd>${com.nome} (Visita: ${formatarDataBR(com.proxima_visita)})</dd>
-      <dt>Atendimento</dt><dd>${rotuloTipo(dados.tipo)}</dd>
-      <dt>Prioridade</dt><dd class="${dados.prioridade === 'prioritaria' ? 'revisao-prio' : ''}">
-        ${dados.prioridade === 'prioritaria' ? 'Prioritária (atender primeiro)' : 'Rotina'}
-      </dd>
-      <dt>Paciente</dt><dd>${dados.nome}</dd>
-      <dt>Nascimento</dt><dd>${formatarDataBR(dados.nascimento)} (${calcularIdade(dados.nascimento)} anos)</dd>
-      <dt>Cartão SUS</dt><dd>${susFormatado}</dd>
-    `;
+    const listaRev = $('#lista-revisao');
+    listaRev.textContent = '';
+    const itensRev = [
+      ['Comunidade', `${com.nome} (Visita: ${formatarDataBR(com.proxima_visita)})`, false],
+      ['Atendimento', rotuloTipo(dados.tipo), false],
+      ['Prioridade', dados.prioridade === 'prioritaria' ? 'Prioritária (atender primeiro)' : 'Rotina', dados.prioridade === 'prioritaria'],
+      ['Paciente', dados.nome, false],
+      ['Nascimento', `${formatarDataBR(dados.nascimento)} (${calcularIdade(dados.nascimento)} anos)`, false],
+      ['Cartão SUS', susFormatado, false]
+    ];
+    itensRev.forEach(([rotulo, valor, destaque]) => {
+      listaRev.appendChild(criarEl('dt', { textContent: rotulo }));
+      listaRev.appendChild(criarEl('dd', { className: destaque ? 'revisao-prio' : '', textContent: valor }));
+    });
 
-    // Se a comunidade está isolada na seca, habilita a escolha entre Polo de Apoio ou Contingência
     const boxSeca = $('#box-contingencia-seca');
     if (com.inacessivel_seca) {
       const polo = buscarComunidade(com.polo_alternativo_id);
       $('#rotulo-opcao-polo').textContent = polo
         ? `Encaminhar para Polo: ${polo.nome} (Visita: ${formatarDataBR(polo.proxima_visita)})`
         : 'Encaminhar para Comunidade Polo';
-
       $('#rotulo-opcao-contingencia').textContent = dados.prioridade === 'prioritaria'
         ? 'Acionar Teleconsulta / Remoção de Urgência (Prioritária)'
         : 'Registrar na Fila de Espera da Seca (Rotina)';
-
       boxSeca.hidden = false;
     } else {
       boxSeca.hidden = true;
@@ -210,7 +232,6 @@
     $('#nome').focus();
   });
 
-  // Etapa 2: Envia via POST /api/demandas com a estratégia de seca selecionada
   $('#btn-confirmar-envio').addEventListener('click', async () => {
     if (!rascunho) return;
 
@@ -219,13 +240,11 @@
       ? (document.querySelector('input[name="estrategia_seca"]:checked')?.value || 'polo')
       : 'rota';
 
-    const payload = { ...rascunho, estrategia_seca: estrategia };
-
     try {
       const resp = await fetch(`${API_URL}/demandas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ ...rascunho, estrategia_seca: estrategia })
       });
       const resultado = await resp.json();
 
@@ -234,7 +253,9 @@
         form.hidden = false;
 
         const boxErros = $('#resumo-erros');
-        boxErros.innerHTML = `<p>Registro recusado pelo servidor (Erro ${resp.status}):</p><ul><li>${resultado.erro}</li></ul>`;
+        boxErros.textContent = '';
+        boxErros.appendChild(criarEl('p', { textContent: `Registro recusado pelo servidor (Erro ${resp.status}):` }));
+        boxErros.appendChild(criarEl('ul', null, [criarEl('li', { textContent: resultado.erro })]));
         boxErros.hidden = false;
         boxErros.focus();
         return;
@@ -308,19 +329,14 @@
     const permitidas = coordenadorAtivo.comunidades;
     const rota = comunidades.filter((c) => c.na_rota && (permitidas.includes('*') || permitidas.includes(c.id)));
 
-    // Busca em paralelo o resumo anônimo (GET /api/comunidades/<id>/resumo) e as demandas de cada comunidade
     const dadosComunidades = await Promise.all(rota.map(async (c) => {
       const [respResumo, respDemandas] = await Promise.all([
         fetch(`${API_URL}/comunidades/${c.id}/resumo`),
         fetch(`${API_URL}/comunidades/${c.id}/demandas`)
       ]);
-      return {
-        resumo: await respResumo.json(),
-        demandas: await respDemandas.json()
-      };
+      return { resumo: await respResumo.json(), demandas: await respDemandas.json() };
     }));
 
-    // Calcula totais gerais do topo a partir dos resumos retornados pela API
     let totalGeral = 0, prioGeral = 0, alertasPrenatal = 0, contingenciasUrgentes = 0;
     dadosComunidades.forEach(({ resumo }) => {
       totalGeral += resumo.total_abertas;
@@ -329,20 +345,29 @@
       if ((resumo.por_tipo.prenatal?.total || 0) >= LIMITE_PRENATAL) alertasPrenatal++;
     });
 
-    $('#resumo-rota').innerHTML = `
-      <div class="numero"><strong>${totalGeral}</strong><span>demandas aguardando</span></div>
-      <div class="numero"><strong>${prioGeral}</strong><span>prioritárias</span></div>
-      <div class="numero ${alertasPrenatal > 0 ? 'destaque' : ''}">
-        <strong>${alertasPrenatal}</strong>
-        <span>${alertasPrenatal === 1 ? 'comunidade com muito pré-natal' : 'comunidades com muito pré-natal'}</span>
-      </div>
-      ${contingenciasUrgentes > 0 ? `
-        <div class="numero destaque">
-          <strong>${contingenciasUrgentes}</strong>
-          <span>${contingenciasUrgentes === 1 ? 'teleconsulta / remoção urgente' : 'teleconsultas / remoções urgentes'}</span>
-        </div>
-      ` : ''}
-    `;
+    // Monta indicadores do topo via createElement()
+    const boxResumo = $('#resumo-rota');
+    boxResumo.textContent = '';
+    const criarCardNumero = (valor, rotulo, destaque) =>
+      criarEl('div', { className: 'numero' + (destaque ? ' destaque' : '') }, [
+        criarEl('strong', { textContent: String(valor) }),
+        criarEl('span', { textContent: rotulo })
+      ]);
+
+    boxResumo.appendChild(criarCardNumero(totalGeral, 'demandas aguardando', false));
+    boxResumo.appendChild(criarCardNumero(prioGeral, 'prioritárias', false));
+    boxResumo.appendChild(criarCardNumero(
+      alertasPrenatal,
+      alertasPrenatal === 1 ? 'comunidade com muito pré-natal' : 'comunidades com muito pré-natal',
+      alertasPrenatal > 0
+    ));
+    if (contingenciasUrgentes > 0) {
+      boxResumo.appendChild(criarCardNumero(
+        contingenciasUrgentes,
+        contingenciasUrgentes === 1 ? 'teleconsulta / remoção urgente' : 'teleconsultas / remoções urgentes',
+        true
+      ));
+    }
 
     const tagsModalidade = {
       polo: ' · Via Polo (origem isolada)',
@@ -350,73 +375,101 @@
       fila_seca: ' · Fila da Seca'
     };
 
-    $('#lista-comunidades').innerHTML = dadosComunidades.map(({ resumo, demandas }) => {
+    // Monta cartões de comunidades e listas de pacientes via createElement()
+    const listaComunidades = $('#lista-comunidades');
+    listaComunidades.textContent = '';
+
+    dadosComunidades.forEach(({ resumo, demandas }) => {
       const qtdPrenatal = resumo.por_tipo.prenatal?.total || 0;
       const alerta = qtdPrenatal >= LIMITE_PRENATAL;
 
-      const linhasTabela = TIPOS.map((t) => {
+      const cartao = criarEl('article', { className: 'comunidade' + (alerta ? ' alerta-prenatal' : '') });
+      cartao.appendChild(criarEl('header', null, [
+        criarEl('h3', { textContent: resumo.comunidade_nome }),
+        criarEl('span', { className: 'total', textContent: `${resumo.total_abertas} ${resumo.total_abertas === 1 ? 'demanda' : 'demandas'}` })
+      ]));
+
+      const infoVisita = `Visita: ${formatarDataBR(resumo.proxima_visita)}` +
+        (resumo.inacessivel_seca ? ' · Inacessível na seca' : '') +
+        (resumo.redirecionadas_polo ? ` · ${resumo.redirecionadas_polo} via polo` : '');
+      const pVisita = criarEl('p', { className: 'ajuda', textContent: infoVisita });
+      pVisita.style.margin = '-.4rem 0 .75rem';
+      cartao.appendChild(pVisita);
+
+      if (alerta) {
+        cartao.appendChild(criarEl('p', { className: 'selo-prenatal', textContent: `Muitas gestantes: ${qtdPrenatal} em pré-natal` }));
+      }
+
+      const tbody = criarEl('tbody');
+      TIPOS.forEach((t) => {
         const info = resumo.por_tipo[t.id] || { total: 0, prioritarias: 0 };
-        return `
-          <tr class="${t.id === 'prenatal' && alerta ? 'linha-prenatal-alta' : ''}">
-            <td>${t.rotulo}</td>
-            <td class="${info.total ? '' : 'zero'}">${info.total}</td>
-            <td class="${info.prioritarias ? 'tag-prio' : 'zero'}">${info.prioritarias}</td>
-          </tr>
-        `;
-      }).join('');
+        tbody.appendChild(criarEl('tr', { className: t.id === 'prenatal' && alerta ? 'linha-prenatal-alta' : '' }, [
+          criarEl('td', { textContent: t.rotulo }),
+          criarEl('td', { className: info.total ? '' : 'zero', textContent: String(info.total) }),
+          criarEl('td', { className: info.prioritarias ? 'tag-prio' : 'zero', textContent: String(info.prioritarias) })
+        ]));
+      });
+
+      cartao.appendChild(criarEl('table', null, [
+        criarEl('thead', null, [criarEl('tr', null, [
+          criarEl('th', { textContent: 'Tipo' }),
+          criarEl('th', { textContent: 'Total' }),
+          criarEl('th', { textContent: 'Prioritárias' })
+        ])]),
+        tbody
+      ]));
 
       const aguardando = demandas.filter((d) => !d.atendida)
         .sort((a, b) => (a.prioridade === b.prioridade ? 0 : a.prioridade === 'prioritaria' ? -1 : 1));
       const atendidas = demandas.filter((d) => d.atendida);
 
-      const linhaPaciente = (d) => {
+      const criarItemPaciente = (d) => {
         const origemTxt = d.comunidade_origem_id && d.comunidade_origem_id !== d.comunidade_id
           ? ` · Morador de ${buscarComunidade(d.comunidade_origem_id)?.nome}`
           : '';
         const modTxt = tagsModalidade[d.modalidade] || '';
+        const detalheTxt = `${rotuloTipo(d.tipo)} · ${calcularIdade(d.nascimento)} anos` +
+          `${d.prioridade === 'prioritaria' ? ' · Prioritária' : ''}${origemTxt}${modTxt}`;
 
-        return `
-          <li class="demanda ${d.prioridade === 'prioritaria' ? 'prioritaria' : ''} ${d.atendida ? 'atendida' : ''}">
-            <span class="nome">${d.nome}</span>
-            <span class="detalhe">${rotuloTipo(d.tipo)} · ${calcularIdade(d.nascimento)} anos${d.prioridade === 'prioritaria' ? ' · Prioritária' : ''}${origemTxt}${modTxt}</span>
-            ${d.atendida
-              ? '<span class="ajuda">Concluída</span>'
-              : `<button type="button" class="botao-atender" data-id="${d.id}" data-com="${resumo.comunidade_id}">Marcar como atendida</button>`}
-          </li>
-        `;
+        const acao = d.atendida
+          ? criarEl('span', { className: 'ajuda', textContent: 'Concluída' })
+          : criarEl('button', {
+              type: 'button',
+              className: 'botao-atender',
+              'data-id': d.id,
+              'data-com': resumo.comunidade_id,
+              textContent: 'Marcar como atendida'
+            });
+
+        return criarEl('li', {
+          className: `demanda ${d.prioridade === 'prioritaria' ? 'prioritaria' : ''} ${d.atendida ? 'atendida' : ''}`
+        }, [
+          criarEl('span', { className: 'nome', textContent: d.nome }),
+          criarEl('span', { className: 'detalhe', textContent: detalheTxt }),
+          acao
+        ]);
       };
 
-      return `
-        <article class="comunidade ${alerta ? 'alerta-prenatal' : ''}">
-          <header>
-            <h3>${resumo.comunidade_nome}</h3>
-            <span class="total">${resumo.total_abertas} ${resumo.total_abertas === 1 ? 'demanda' : 'demandas'}</span>
-          </header>
-          <p class="ajuda" style="margin: -.4rem 0 .75rem;">
-            Visita: <strong>${formatarDataBR(resumo.proxima_visita)}</strong>
-            ${resumo.inacessivel_seca ? ' · <strong>Inacessível na seca</strong>' : ''}
-            ${resumo.redirecionadas_polo ? ` · <strong>${resumo.redirecionadas_polo} via polo</strong>` : ''}
-          </p>
-          ${alerta ? `<p class="selo-prenatal">Muitas gestantes: ${qtdPrenatal} em pré-natal</p>` : ''}
-          <table>
-            <thead><tr><th>Tipo</th><th>Total</th><th>Prioritárias</th></tr></thead>
-            <tbody>${linhasTabela}</tbody>
-          </table>
-          <details data-com="${resumo.comunidade_id}" ${abertas.has(resumo.comunidade_id) ? 'open' : ''}>
-            <summary>Gerenciar atendimentos (${aguardando.length} aguardando)</summary>
-            ${aguardando.length
-              ? `<ul class="demandas">${aguardando.map(linhaPaciente).join('')}</ul>`
-              : `<p class="vazio">Todas as demandas desta comunidade foram atendidas.</p>`}
-            ${atendidas.length
-              ? `<p class="subtitulo">Já atendidas (${atendidas.length})</p><ul class="demandas">${atendidas.map(linhaPaciente).join('')}</ul>`
-              : ''}
-          </details>
-        </article>
-      `;
-    }).join('');
+      const det = criarEl('details', { 'data-com': resumo.comunidade_id, open: abertas.has(resumo.comunidade_id) }, [
+        criarEl('summary', { textContent: `Gerenciar atendimentos (${aguardando.length} aguardando)` })
+      ]);
+
+      if (aguardando.length) {
+        det.appendChild(criarEl('ul', { className: 'demandas' }, aguardando.map(criarItemPaciente)));
+      } else {
+        det.appendChild(criarEl('p', { className: 'vazio', textContent: 'Todas as demandas desta comunidade foram atendidas.' }));
+      }
+
+      if (atendidas.length) {
+        det.appendChild(criarEl('p', { className: 'subtitulo', textContent: `Já atendidas (${atendidas.length})` }));
+        det.appendChild(criarEl('ul', { className: 'demandas' }, atendidas.map(criarItemPaciente)));
+      }
+
+      cartao.appendChild(det);
+      listaComunidades.appendChild(cartao);
+    });
   }
 
-  // Dispara PATCH /api/demandas/<id>/atendida
   $('#lista-comunidades').addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-id]');
     if (!btn) return;
