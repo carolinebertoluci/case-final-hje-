@@ -1,7 +1,10 @@
 (function () {
   'use strict';
 
-  /* ==================== 1. DADOS FIXOS ==================== */
+  /* ==================== 1. CONFIGURAÇÃO E DADOS FIXOS ==================== */
+  const API_URL = 'http://localhost:5000/api';
+  const LIMITE_PRENATAL = 3;
+
   const TIPOS = [
     { id: 'clinico',   rotulo: 'Clínico geral' },
     { id: 'prenatal',  rotulo: 'Pré-natal' },
@@ -10,81 +13,24 @@
     { id: 'retorno',   rotulo: 'Retorno' }
   ];
 
-  const COMUNIDADES = [
-    { id: 'c1', nome: 'Vila Esperança',              naRota: true },
-    { id: 'c2', nome: 'Ribeirão Seco',               naRota: true },
-    { id: 'c3', nome: 'Sítio das Palmeiras',         naRota: true },
-    { id: 'c4', nome: 'Assentamento Novo Horizonte', naRota: true },
-    { id: 'c5', nome: 'Beira do Rio',                naRota: true },
-    { id: 'c6', nome: 'Serra Alta',                  naRota: false }
-  ];
-
-  // Regra de acesso: cada PIN libera apenas as comunidades listadas ('*' = todas)
+  // Controle de acesso por perfil (PIN -> comunidades permitidas)
   const COORDENADORES = [
     { pin: '1010', nome: 'Dra. Helena (Coordenação Geral)', comunidades: ['*'] },
     { pin: '2020', nome: 'Enf. Carlos (Regional Norte)',    comunidades: ['c1', 'c2', 'c3'] },
     { pin: '3030', nome: 'Enf. Mariana (Regional Sul)',     comunidades: ['c4', 'c5', 'c6'] }
   ];
 
-  const LIMITE_PRENATAL = 3;
-  const CHAVE_STORAGE = 'rota-saude:v1';
-
-  const EXEMPLOS = [
-    ['c1', 'prenatal', 'prioritaria', 'Ana Paula Ribeiro', '1998-03-12'],
-    ['c1', 'prenatal', 'rotina', 'Juliana Souza Lima', '2001-07-30'],
-    ['c1', 'prenatal', 'rotina', 'Camila Ferreira', '1995-11-02'],
-    ['c1', 'ultrassom', 'rotina', 'Rita de Cássia Alves', '1992-01-18'],
-    ['c1', 'clinico', 'prioritaria', 'José Antônio Pereira', '1950-05-09'],
-    ['c2', 'clinico', 'rotina', 'Marcos Vinícius Dias', '1987-09-21'],
-    ['c2', 'odonto', 'rotina', 'Lucas Gabriel Rocha', '2012-04-14'],
-    ['c2', 'retorno', 'prioritaria', 'Maria Aparecida Santos', '1944-12-01'],
-    ['c3', 'prenatal', 'prioritaria', 'Fernanda Oliveira', '2003-02-25'],
-    ['c3', 'prenatal', 'prioritaria', 'Larissa Mendes', '1999-06-17'],
-    ['c3', 'prenatal', 'rotina', 'Patrícia Gomes', '1990-10-05'],
-    ['c3', 'prenatal', 'rotina', 'Sandra Regina Costa', '1996-08-08'],
-    ['c3', 'clinico', 'rotina', 'Antônio Carlos Nunes', '1960-03-03'],
-    ['c4', 'odonto', 'rotina', 'Pedro Henrique Lima', '2010-01-27'],
-    ['c4', 'clinico', 'rotina', 'Helena Martins', '1978-05-30'],
-    ['c4', 'prenatal', 'rotina', 'Bruna Carvalho', '2000-09-09'],
-    ['c5', 'retorno', 'rotina', 'Francisco das Chagas', '1955-07-07'],
-    ['c5', 'ultrassom', 'prioritaria', 'Vanessa Teixeira', '1994-12-19']
-  ];
-
-  /* ==================== 2. ESTADO E PERSISTÊNCIA ==================== */
+  /* ==================== 2. ESTADO ==================== */
   const $ = (sel) => document.querySelector(sel);
-  let demandas = [];
+  let comunidades = [];
   let rascunho = null;
   let coordenadorAtivo = JSON.parse(sessionStorage.getItem('rota-saude:coord') || 'null');
   const abertas = new Set();
 
-  function carregarDados() {
-    const salvo = JSON.parse(localStorage.getItem(CHAVE_STORAGE) || 'null');
-    if (salvo && Array.isArray(salvo.demandas)) {
-      demandas = salvo.demandas;
-    } else {
-      demandas = EXEMPLOS.map((x, i) => ({
-        id: 'ex-' + (i + 1), atendida: false, criadaEm: Date.now() + i,
-        comunidadeId: x[0], tipo: x[1], prioridade: x[2], nome: x[3], nascimento: x[4], cartaoSus: ''
-      }));
-      salvarDados();
-    }
-  }
-
-  function salvarDados() {
-    localStorage.setItem(CHAVE_STORAGE, JSON.stringify({ demandas }));
-  }
-
-  window.resetarDados = function () {
-    localStorage.removeItem(CHAVE_STORAGE);
-    carregarDados();
-    atualizarTelaCoordenacao();
-    atualizarAjudaComunidade();
-  };
-
   /* ==================== 3. UTILITÁRIOS ==================== */
-  const rotuloTipo = (id) => TIPOS.find((t) => t.id === id).rotulo;
-  const nomeComunidade = (id) => COMUNIDADES.find((c) => c.id === id).nome;
-  const formatarDataBR = (iso) => iso.split('-').reverse().join('/');
+  const rotuloTipo = (id) => TIPOS.find((t) => t.id === id)?.rotulo || id;
+  const buscarComunidade = (id) => comunidades.find((c) => c.id === id);
+  const formatarDataBR = (iso) => (iso ? iso.split('-').reverse().join('/') : 'Sem data prevista');
   const hojeISO = () => new Date().toISOString().slice(0, 10);
 
   function calcularIdade(iso) {
@@ -101,7 +47,7 @@
     el.textContent = texto;
     el.classList.add('visivel');
     clearTimeout(timerAviso);
-    timerAviso = setTimeout(() => el.classList.remove('visivel'), 3500);
+    timerAviso = setTimeout(() => el.classList.remove('visivel'), 4000);
   }
 
   /* ==================== 4. NAVEGAÇÃO ENTRE ABAS ==================== */
@@ -125,8 +71,6 @@
   const form = $('#form-demanda');
   const selComunidade = $('#comunidade');
 
-  // Preenche o select de comunidades e os botões de tipo de atendimento
-  COMUNIDADES.forEach((c) => selComunidade.add(new Option(c.nome, c.id)));
   $('#opcoes-tipo').innerHTML = TIPOS.map((t) => `
     <label class="opcao">
       <input type="radio" name="tipo" value="${t.id}">
@@ -134,13 +78,35 @@
     </label>
   `).join('');
 
+  // Carrega comunidades do GET /api/comunidades
+  async function carregarComunidades() {
+    try {
+      const resp = await fetch(`${API_URL}/comunidades`);
+      comunidades = await resp.json();
+
+      selComunidade.innerHTML = '<option value="">Selecione a comunidade…</option>';
+      comunidades.forEach((c) => {
+        const avisoSeca = c.inacessivel_seca ? ' [INACESSÍVEL NA SECA]' : '';
+        selComunidade.add(new Option(`${c.nome}${avisoSeca}`, c.id));
+      });
+    } catch (err) {
+      avisar('Erro ao conectar com o servidor Flask (verifique se app.py está rodando).');
+    }
+  }
+
+  // Mostra data da próxima visita ou alerta de seca ao selecionar comunidade
   function atualizarAjudaComunidade() {
-    const id = selComunidade.value;
-    if (!id) { $('#ajuda-comunidade').textContent = ''; return; }
-    const qtd = demandas.filter((d) => d.comunidadeId === id && !d.atendida).length;
-    $('#ajuda-comunidade').textContent = qtd === 0
-      ? 'Nenhuma demanda aguardando nesta comunidade.'
-      : `${qtd} ${qtd === 1 ? 'demanda aguardando' : 'demandas aguardando'} atendimento nesta comunidade.`;
+    const c = buscarComunidade(selComunidade.value);
+    const ajuda = $('#ajuda-comunidade');
+    if (!c) { ajuda.textContent = ''; return; }
+
+    if (c.inacessivel_seca) {
+      const polo = buscarComunidade(c.polo_alternativo_id);
+      const txtPolo = polo ? ` (Polo de apoio: ${polo.nome})` : '';
+      ajuda.textContent = `Atenção: ${c.nome} está isolada na seca${txtPolo}. Você escolherá o plano de atendimento na revisão.`;
+    } else {
+      ajuda.textContent = `Próxima visita prevista: ${formatarDataBR(c.proxima_visita)}.`;
+    }
   }
   selComunidade.addEventListener('change', atualizarAjudaComunidade);
 
@@ -154,7 +120,7 @@
       if (msg) erros.push(msg);
     };
 
-    marcar('comunidade', v.comunidadeId ? '' : 'Escolha a comunidade onde o paciente mora.');
+    marcar('comunidade', v.comunidade_id ? '' : 'Escolha a comunidade onde o paciente mora.');
     marcar('tipo', v.tipo ? '' : 'Escolha o tipo de atendimento.');
     marcar('prioridade', v.prioridade ? '' : 'Marque se é rotina ou prioritária.');
 
@@ -168,8 +134,7 @@
     else if (v.nascimento > hojeISO() || calcularIdade(v.nascimento) > 120) erroNasc = 'Data de nascimento inválida.';
     marcar('nascimento', erroNasc);
 
-    const susLimpo = v.cartaoSus.replace(/\D/g, '');
-    marcar('cartaoSus', susLimpo && susLimpo.length !== 15 ? 'O Cartão SUS deve ter exatamente 15 números.' : '');
+    marcar('cartaoSus', v.cartao_sus && v.cartao_sus.length !== 15 ? 'O Cartão SUS deve ter exatamente 15 números.' : '');
 
     const boxErros = $('#resumo-erros');
     boxErros.hidden = erros.length === 0;
@@ -180,19 +145,19 @@
     return erros.length === 0;
   }
 
-  // Etapa 1: Valida e mostra a tela de revisão
+  // Etapa 1: Valida, abre revisão e exibe opções de contingência se a comunidade estiver na seca
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     $('#confirmacao').hidden = true;
 
     const fd = new FormData(form);
     const dados = {
-      comunidadeId: fd.get('comunidade') || '',
+      comunidade_id: fd.get('comunidade') || '',
       tipo: fd.get('tipo') || '',
       prioridade: fd.get('prioridade') || '',
       nome: (fd.get('nome') || '').replace(/\s+/g, ' ').trim(),
       nascimento: fd.get('nascimento') || '',
-      cartaoSus: (fd.get('cartaoSus') || '').replace(/\D/g, '')
+      cartao_sus: (fd.get('cartaoSus') || '').replace(/\D/g, '')
     };
 
     if (!validarFormulario(dados)) {
@@ -201,12 +166,13 @@
     }
 
     rascunho = dados;
-    const susFormatado = dados.cartaoSus
-      ? dados.cartaoSus.replace(/(\d{3})(\d{4})(\d{4})(\d{4})/, '$1 $2 $3 $4')
+    const com = buscarComunidade(dados.comunidade_id);
+    const susFormatado = dados.cartao_sus
+      ? dados.cartao_sus.replace(/(\d{3})(\d{4})(\d{4})(\d{4})/, '$1 $2 $3 $4')
       : 'Não informado';
 
     $('#lista-revisao').innerHTML = `
-      <dt>Comunidade</dt><dd>${nomeComunidade(dados.comunidadeId)}</dd>
+      <dt>Comunidade</dt><dd>${com.nome} (Visita: ${formatarDataBR(com.proxima_visita)})</dd>
       <dt>Atendimento</dt><dd>${rotuloTipo(dados.tipo)}</dd>
       <dt>Prioridade</dt><dd class="${dados.prioridade === 'prioritaria' ? 'revisao-prio' : ''}">
         ${dados.prioridade === 'prioritaria' ? 'Prioritária (atender primeiro)' : 'Rotina'}
@@ -216,43 +182,94 @@
       <dt>Cartão SUS</dt><dd>${susFormatado}</dd>
     `;
 
+    // Se a comunidade está isolada na seca, habilita a escolha entre Polo de Apoio ou Contingência
+    const boxSeca = $('#box-contingencia-seca');
+    if (com.inacessivel_seca) {
+      const polo = buscarComunidade(com.polo_alternativo_id);
+      $('#rotulo-opcao-polo').textContent = polo
+        ? `Encaminhar para Polo: ${polo.nome} (Visita: ${formatarDataBR(polo.proxima_visita)})`
+        : 'Encaminhar para Comunidade Polo';
+
+      $('#rotulo-opcao-contingencia').textContent = dados.prioridade === 'prioritaria'
+        ? 'Acionar Teleconsulta / Remoção de Urgência (Prioritária)'
+        : 'Registrar na Fila de Espera da Seca (Rotina)';
+
+      boxSeca.hidden = false;
+    } else {
+      boxSeca.hidden = true;
+    }
+
     form.hidden = true;
     $('#painel-revisao').hidden = false;
     $('#painel-revisao').focus();
   });
 
-  // Etapa 2A: Voltar para corrigir
   $('#btn-voltar-edicao').addEventListener('click', () => {
     $('#painel-revisao').hidden = true;
     form.hidden = false;
     $('#nome').focus();
   });
 
-  // Etapa 2B: Confirmar e salvar no localStorage
-  $('#btn-confirmar-envio').addEventListener('click', () => {
+  // Etapa 2: Envia via POST /api/demandas com a estratégia de seca selecionada
+  $('#btn-confirmar-envio').addEventListener('click', async () => {
     if (!rascunho) return;
 
-    demandas.push({ id: 'd-' + Date.now(), atendida: false, criadaEm: Date.now(), ...rascunho });
-    salvarDados();
+    const com = buscarComunidade(rascunho.comunidade_id);
+    const estrategia = com.inacessivel_seca
+      ? (document.querySelector('input[name="estrategia_seca"]:checked')?.value || 'polo')
+      : 'rota';
 
-    const comAtual = rascunho.comunidadeId;
-    const nomeSalvo = rascunho.nome;
-    rascunho = null;
+    const payload = { ...rascunho, estrategia_seca: estrategia };
 
-    form.reset();
-    selComunidade.value = comAtual;
-    atualizarAjudaComunidade();
+    try {
+      const resp = await fetch(`${API_URL}/demandas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const resultado = await resp.json();
 
-    $('#painel-revisao').hidden = true;
-    form.hidden = false;
+      if (!resp.ok) {
+        $('#painel-revisao').hidden = true;
+        form.hidden = false;
 
-    const conf = $('#confirmacao');
-    conf.textContent = `Pronto! A demanda de ${nomeSalvo} foi registrada em ${nomeComunidade(comAtual)}.`;
-    conf.hidden = false;
-    conf.focus();
+        const boxErros = $('#resumo-erros');
+        boxErros.innerHTML = `<p>Registro recusado pelo servidor (Erro ${resp.status}):</p><ul><li>${resultado.erro}</li></ul>`;
+        boxErros.hidden = false;
+        boxErros.focus();
+        return;
+      }
+
+      const comAtual = rascunho.comunidade_id;
+      const nomeSalvo = rascunho.nome;
+      const destino = buscarComunidade(resultado.comunidade_id);
+      rascunho = null;
+
+      form.reset();
+      selComunidade.value = comAtual;
+      atualizarAjudaComunidade();
+
+      $('#painel-revisao').hidden = true;
+      form.hidden = false;
+
+      const conf = $('#confirmacao');
+      const detalheDestino = resultado.modalidade === 'polo'
+        ? `redirecionada para o Polo ${destino.nome}`
+        : resultado.modalidade === 'teleconsulta_urgente'
+          ? 'registrada em ALERTA DE TELECONSULTA / REMOÇÃO'
+          : resultado.modalidade === 'fila_seca'
+            ? 'registrada na Fila de Contingência da Seca'
+            : `salva na rota de ${destino.nome}`;
+
+      conf.textContent = `Pronto! A demanda de ${nomeSalvo} foi ${detalheDestino}.`;
+      conf.hidden = false;
+      conf.focus();
+    } catch (err) {
+      avisar('Falha de comunicação com o servidor Flask.');
+    }
   });
 
-  /* ==================== 6. TELA DA COORDENAÇÃO (PIN + FILTRO) ==================== */
+  /* ==================== 6. TELA DA COORDENAÇÃO (PIN + RESUMO API) ==================== */
   $('#form-login-coord').addEventListener('submit', (e) => {
     e.preventDefault();
     const input = $('#pin-coord');
@@ -281,24 +298,35 @@
     avisar('Aba de coordenação bloqueada.');
   });
 
-  function atualizarTelaCoordenacao() {
+  async function atualizarTelaCoordenacao() {
     $('#bloqueio-coord').hidden = !!coordenadorAtivo;
     $('#painel-coord').hidden = !coordenadorAtivo;
     if (!coordenadorAtivo) return;
 
     $('#info-coordenador').textContent = coordenadorAtivo.nome;
 
-    // Filtra apenas comunidades na rota E autorizadas para o coordenador logado
     const permitidas = coordenadorAtivo.comunidades;
-    const rota = COMUNIDADES.filter((c) => c.naRota && (permitidas.includes('*') || permitidas.includes(c.id)));
+    const rota = comunidades.filter((c) => c.na_rota && (permitidas.includes('*') || permitidas.includes(c.id)));
 
-    // Calcula totais gerais para os cards do topo
-    let totalGeral = 0, prioGeral = 0, alertasPrenatal = 0;
-    rota.forEach((c) => {
-      const pend = demandas.filter((d) => d.comunidadeId === c.id && !d.atendida);
-      totalGeral += pend.length;
-      prioGeral += pend.filter((d) => d.prioridade === 'prioritaria').length;
-      if (pend.filter((d) => d.tipo === 'prenatal').length >= LIMITE_PRENATAL) alertasPrenatal++;
+    // Busca em paralelo o resumo anônimo (GET /api/comunidades/<id>/resumo) e as demandas de cada comunidade
+    const dadosComunidades = await Promise.all(rota.map(async (c) => {
+      const [respResumo, respDemandas] = await Promise.all([
+        fetch(`${API_URL}/comunidades/${c.id}/resumo`),
+        fetch(`${API_URL}/comunidades/${c.id}/demandas`)
+      ]);
+      return {
+        resumo: await respResumo.json(),
+        demandas: await respDemandas.json()
+      };
+    }));
+
+    // Calcula totais gerais do topo a partir dos resumos retornados pela API
+    let totalGeral = 0, prioGeral = 0, alertasPrenatal = 0, contingenciasUrgentes = 0;
+    dadosComunidades.forEach(({ resumo }) => {
+      totalGeral += resumo.total_abertas;
+      prioGeral += resumo.total_prioritarias;
+      contingenciasUrgentes += resumo.contingencia_urgente || 0;
+      if ((resumo.por_tipo.prenatal?.total || 0) >= LIMITE_PRENATAL) alertasPrenatal++;
     });
 
     $('#resumo-rota').innerHTML = `
@@ -308,53 +336,74 @@
         <strong>${alertasPrenatal}</strong>
         <span>${alertasPrenatal === 1 ? 'comunidade com muito pré-natal' : 'comunidades com muito pré-natal'}</span>
       </div>
+      ${contingenciasUrgentes > 0 ? `
+        <div class="numero destaque">
+          <strong>${contingenciasUrgentes}</strong>
+          <span>${contingenciasUrgentes === 1 ? 'teleconsulta / remoção urgente' : 'teleconsultas / remoções urgentes'}</span>
+        </div>
+      ` : ''}
     `;
 
-    // Renderiza os cartões de cada comunidade permitida
-    $('#lista-comunidades').innerHTML = rota.map((c) => {
-      const todas = demandas.filter((d) => d.comunidadeId === c.id);
-      const aguardando = todas.filter((d) => !d.atendida)
-        .sort((a, b) => (a.prioridade === b.prioridade ? a.criadaEm - b.criadaEm : a.prioridade === 'prioritaria' ? -1 : 1));
-      const atendidas = todas.filter((d) => d.atendida);
+    const tagsModalidade = {
+      polo: ' · Via Polo (origem isolada)',
+      teleconsulta_urgente: ' · ALERTA TELECONSULTA / REMOÇÃO',
+      fila_seca: ' · Fila da Seca'
+    };
 
-      const qtdPrenatal = aguardando.filter((d) => d.tipo === 'prenatal').length;
+    $('#lista-comunidades').innerHTML = dadosComunidades.map(({ resumo, demandas }) => {
+      const qtdPrenatal = resumo.por_tipo.prenatal?.total || 0;
       const alerta = qtdPrenatal >= LIMITE_PRENATAL;
 
       const linhasTabela = TIPOS.map((t) => {
-        const doTipo = aguardando.filter((d) => d.tipo === t.id);
-        const prioTipo = doTipo.filter((d) => d.prioridade === 'prioritaria').length;
+        const info = resumo.por_tipo[t.id] || { total: 0, prioritarias: 0 };
         return `
           <tr class="${t.id === 'prenatal' && alerta ? 'linha-prenatal-alta' : ''}">
             <td>${t.rotulo}</td>
-            <td class="${doTipo.length ? '' : 'zero'}">${doTipo.length}</td>
-            <td class="${prioTipo ? 'tag-prio' : 'zero'}">${prioTipo}</td>
+            <td class="${info.total ? '' : 'zero'}">${info.total}</td>
+            <td class="${info.prioritarias ? 'tag-prio' : 'zero'}">${info.prioritarias}</td>
           </tr>
         `;
       }).join('');
 
-      const linhaPaciente = (d) => `
-        <li class="demanda ${d.prioridade === 'prioritaria' ? 'prioritaria' : ''} ${d.atendida ? 'atendida' : ''}">
-          <span class="nome">${d.nome}</span>
-          <span class="detalhe">${rotuloTipo(d.tipo)} · ${calcularIdade(d.nascimento)} anos${d.prioridade === 'prioritaria' ? ' · Prioritária' : ''}</span>
-          <button type="button" class="${d.atendida ? 'botao-desfazer' : 'botao-atender'}" data-id="${d.id}">
-            ${d.atendida ? 'Desfazer' : 'Marcar como atendida'}
-          </button>
-        </li>
-      `;
+      const aguardando = demandas.filter((d) => !d.atendida)
+        .sort((a, b) => (a.prioridade === b.prioridade ? 0 : a.prioridade === 'prioritaria' ? -1 : 1));
+      const atendidas = demandas.filter((d) => d.atendida);
+
+      const linhaPaciente = (d) => {
+        const origemTxt = d.comunidade_origem_id && d.comunidade_origem_id !== d.comunidade_id
+          ? ` · Morador de ${buscarComunidade(d.comunidade_origem_id)?.nome}`
+          : '';
+        const modTxt = tagsModalidade[d.modalidade] || '';
+
+        return `
+          <li class="demanda ${d.prioridade === 'prioritaria' ? 'prioritaria' : ''} ${d.atendida ? 'atendida' : ''}">
+            <span class="nome">${d.nome}</span>
+            <span class="detalhe">${rotuloTipo(d.tipo)} · ${calcularIdade(d.nascimento)} anos${d.prioridade === 'prioritaria' ? ' · Prioritária' : ''}${origemTxt}${modTxt}</span>
+            ${d.atendida
+              ? '<span class="ajuda">Concluída</span>'
+              : `<button type="button" class="botao-atender" data-id="${d.id}" data-com="${resumo.comunidade_id}">Marcar como atendida</button>`}
+          </li>
+        `;
+      };
 
       return `
         <article class="comunidade ${alerta ? 'alerta-prenatal' : ''}">
           <header>
-            <h3>${c.nome}</h3>
-            <span class="total">${aguardando.length} ${aguardando.length === 1 ? 'demanda' : 'demandas'}</span>
+            <h3>${resumo.comunidade_nome}</h3>
+            <span class="total">${resumo.total_abertas} ${resumo.total_abertas === 1 ? 'demanda' : 'demandas'}</span>
           </header>
+          <p class="ajuda" style="margin: -.4rem 0 .75rem;">
+            Visita: <strong>${formatarDataBR(resumo.proxima_visita)}</strong>
+            ${resumo.inacessivel_seca ? ' · <strong>Inacessível na seca</strong>' : ''}
+            ${resumo.redirecionadas_polo ? ` · <strong>${resumo.redirecionadas_polo} via polo</strong>` : ''}
+          </p>
           ${alerta ? `<p class="selo-prenatal">Muitas gestantes: ${qtdPrenatal} em pré-natal</p>` : ''}
           <table>
             <thead><tr><th>Tipo</th><th>Total</th><th>Prioritárias</th></tr></thead>
             <tbody>${linhasTabela}</tbody>
           </table>
-          <details data-com="${c.id}" ${abertas.has(c.id) ? 'open' : ''}>
-            <summary>Ver pacientes (${aguardando.length} aguardando)</summary>
+          <details data-com="${resumo.comunidade_id}" ${abertas.has(resumo.comunidade_id) ? 'open' : ''}>
+            <summary>Gerenciar atendimentos (${aguardando.length} aguardando)</summary>
             ${aguardando.length
               ? `<ul class="demandas">${aguardando.map(linhaPaciente).join('')}</ul>`
               : `<p class="vazio">Todas as demandas desta comunidade foram atendidas.</p>`}
@@ -365,25 +414,30 @@
         </article>
       `;
     }).join('');
-
-    atualizarAjudaComunidade();
   }
 
-  // Clique em "Marcar como atendida" ou "Desfazer"
-  $('#lista-comunidades').addEventListener('click', (e) => {
+  // Dispara PATCH /api/demandas/<id>/atendida
+  $('#lista-comunidades').addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-id]');
     if (!btn) return;
-    const d = demandas.find((x) => String(x.id) === btn.dataset.id);
-    if (!d) return;
 
-    d.atendida = !d.atendida;
-    abertas.add(d.comunidadeId);
-    salvarDados();
-    atualizarTelaCoordenacao();
-    avisar(d.atendida ? `Demanda de ${d.nome} marcada como atendida.` : `Demanda de ${d.nome} voltou para a fila.`);
+    try {
+      const resp = await fetch(`${API_URL}/demandas/${btn.dataset.id}/atendida`, { method: 'PATCH' });
+      const resultado = await resp.json();
+
+      if (!resp.ok) {
+        avisar(`Erro ${resp.status}: ${resultado.erro}`);
+        return;
+      }
+
+      abertas.add(btn.dataset.com);
+      await atualizarTelaCoordenacao();
+      avisar(`Demanda de ${resultado.nome} marcada como atendida.`);
+    } catch (err) {
+      avisar('Erro ao comunicar com o servidor.');
+    }
   });
 
-  // Guarda quais listas <details> o coordenador deixou abertas
   $('#lista-comunidades').addEventListener('toggle', (e) => {
     if (e.target.tagName !== 'DETAILS') return;
     if (e.target.open) abertas.add(e.target.dataset.com);
@@ -391,6 +445,5 @@
   }, true);
 
   /* ==================== 7. INICIALIZAÇÃO ==================== */
-  carregarDados();
-  atualizarAjudaComunidade();
+  carregarComunidades();
 })();

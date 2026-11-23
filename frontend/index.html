@@ -91,6 +91,28 @@
         <h3>Confira os dados antes de enviar</h3>
         <p class="ajuda">Verifique se as informações do paciente e a prioridade estão corretas.</p>
         <dl id="lista-revisao" class="lista-revisao"></dl>
+
+        <!-- Aparece apenas se a comunidade estiver inacessível na seca -->
+        <fieldset id="box-contingencia-seca" class="campo paciente" hidden>
+          <legend>Comunidade isolada na seca — Escolha o plano de atendimento</legend>
+          <div class="opcoes">
+            <label class="opcao">
+              <input type="radio" name="estrategia_seca" value="polo" checked>
+              <span>
+                <strong id="rotulo-opcao-polo">Encaminhar para Comunidade Polo</strong>
+                <small>O paciente será atendido no ponto de apoio acessível mais próximo.</small>
+              </span>
+            </label>
+            <label class="opcao opcao-prio">
+              <input type="radio" name="estrategia_seca" value="contingencia">
+              <span>
+                <strong id="rotulo-opcao-contingencia">Manter na comunidade (Contingência)</strong>
+                <small id="desc-opcao-contingencia">Prioritárias acionam teleconsulta/remoção; rotina aguarda acesso.</small>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
         <div class="acoes-revisao">
           <button type="button" id="btn-voltar-edicao" class="botao-desfazer">Voltar e editar</button>
           <button type="button" id="btn-confirmar-envio" class="botao-principal">Confirmar e registrar</button>
