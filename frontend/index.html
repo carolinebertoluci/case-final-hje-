@@ -15,39 +15,37 @@
   <header class="topo">
     <h1>Navega Saúde</h1>
     <div class="abas" role="tablist" aria-label="Escolha a tela">
-      <button type="button" role="tab" id="aba-acs" aria-selected="true" aria-controls="tela-acs">Agente de saúde</button>
-      <button type="button" role="tab" id="aba-coord" aria-selected="false" aria-controls="tela-coord" tabindex="-1">Coordenação</button>
+      <button type="button" role="tab" id="aba-acs" aria-selected="true">Agente de saúde</button>
+      <button type="button" role="tab" id="aba-coord" aria-selected="false">Coordenação</button>
     </div>
   </header>
 
   <main id="principal">
-
-    <!-- TELA DO ACS -->
-    <section id="tela-acs" role="tabpanel" aria-labelledby="aba-acs">
+    <!-- TELA 1: AGENTE DE SAÚDE -->
+    <section id="tela-acs" role="tabpanel">
       <h2>Registrar demanda</h2>
-      <p class="intro">Preencha os dados do paciente. Os campos com <span class="obrig">*</span> são obrigatórios.</p>
+      <p class="intro">Preencha os dados do paciente. Campos com <span class="obrig">*</span> são obrigatórios.</p>
 
       <div id="resumo-erros" class="resumo-erros" role="alert" tabindex="-1" hidden></div>
       <div id="confirmacao" class="confirmacao" role="status" tabindex="-1" hidden></div>
 
       <form id="form-demanda" novalidate>
-
         <div class="campo">
           <label for="comunidade">Comunidade <span class="obrig">*</span></label>
-          <select id="comunidade" name="comunidade" aria-describedby="ajuda-comunidade erro-comunidade">
+          <select id="comunidade" name="comunidade">
             <option value="">Selecione a comunidade…</option>
           </select>
           <p class="ajuda" id="ajuda-comunidade"></p>
           <p class="erro" id="erro-comunidade" hidden></p>
         </div>
 
-        <fieldset class="campo" aria-describedby="erro-tipo">
+        <fieldset class="campo">
           <legend>Tipo de atendimento <span class="obrig">*</span></legend>
           <div class="opcoes opcoes-tipo" id="opcoes-tipo"></div>
           <p class="erro" id="erro-tipo" hidden></p>
         </fieldset>
 
-        <fieldset class="campo" aria-describedby="erro-prioridade">
+        <fieldset class="campo">
           <legend>Prioridade <span class="obrig">*</span></legend>
           <div class="opcoes opcoes-prioridade">
             <label class="opcao">
@@ -64,23 +62,22 @@
 
         <fieldset class="campo paciente">
           <legend>Identificação do paciente</legend>
-
           <div class="campo">
             <label for="nome">Nome completo <span class="obrig">*</span></label>
-            <input type="text" id="nome" name="nome" autocomplete="off" aria-describedby="erro-nome">
+            <input type="text" id="nome" name="nome" autocomplete="off">
             <p class="erro" id="erro-nome" hidden></p>
           </div>
 
           <div class="linha">
             <div class="campo">
               <label for="nascimento">Data de nascimento <span class="obrig">*</span></label>
-              <input type="date" id="nascimento" name="nascimento" aria-describedby="erro-nascimento">
+              <input type="date" id="nascimento" name="nascimento">
               <p class="erro" id="erro-nascimento" hidden></p>
             </div>
             <div class="campo">
               <label for="cartaoSus">Cartão SUS <span class="opcional">(se tiver)</span></label>
-              <input type="text" id="cartaoSus" name="cartaoSus" inputmode="numeric" autocomplete="off" aria-describedby="ajuda-sus erro-cartaoSus">
-              <p class="ajuda" id="ajuda-sus">São 15 números. Pode deixar em branco.</p>
+              <input type="text" id="cartaoSus" name="cartaoSus" inputmode="numeric" autocomplete="off">
+              <p class="ajuda">São 15 números. Pode deixar em branco.</p>
               <p class="erro" id="erro-cartaoSus" hidden></p>
             </div>
           </div>
@@ -89,13 +86,11 @@
         <button type="submit" class="botao-principal">Revisar dados</button>
       </form>
 
-      <!-- ETAPA DE REVISÃO ANTES DO ENVIO -->
-      <div id="painel-revisao" class="painel-revisao" tabindex="-1" hidden>
+      <!-- ETAPA DE REVISÃO -->
+      <div id="painel-revisao" class="cartao painel-revisao" tabindex="-1" hidden>
         <h3>Confira os dados antes de enviar</h3>
         <p class="ajuda">Verifique se as informações do paciente e a prioridade estão corretas.</p>
-
         <dl id="lista-revisao" class="lista-revisao"></dl>
-
         <div class="acoes-revisao">
           <button type="button" id="btn-voltar-edicao" class="botao-desfazer">Voltar e editar</button>
           <button type="button" id="btn-confirmar-envio" class="botao-principal">Confirmar e registrar</button>
@@ -103,48 +98,42 @@
       </div>
     </section>
 
-    <!-- TELA DA COORDENAÇÃO -->
-    <section id="tela-coord" role="tabpanel" aria-labelledby="aba-coord" hidden>
-
-      <!-- 1. TELA DE BLOQUEIO (Aparece quando não há coordenador autenticado) -->
-      <div id="bloqueio-coord" class="bloqueio-coord">
+    <!-- TELA 2: COORDENAÇÃO -->
+    <section id="tela-coord" role="tabpanel" hidden>
+      <!-- BLOQUEIO POR PIN -->
+      <div id="bloqueio-coord">
         <h2>Acesso restrito à Coordenação</h2>
-        <p class="intro">Digite seu código de acesso para visualizar as demandas e gerenciar a rota das suas comunidades.</p>
-
+        <p class="intro">Digite seu código de acesso para gerenciar a rota das suas comunidades.</p>
         <form id="form-login-coord" class="form-login" novalidate>
           <div class="campo">
             <label for="pin-coord">Código de acesso (PIN) <span class="obrig">*</span></label>
-            <input type="password" id="pin-coord" name="pin" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="Ex: 1234" aria-describedby="ajuda-pin erro-pin">
-            <p class="ajuda" id="ajuda-pin">Digite o código de acesso fornecido pela coordenação.</p>
+            <input type="password" id="pin-coord" name="pin" inputmode="numeric" maxlength="6" placeholder="Código">
+            <p class="ajuda">O PIN é fornecido pela coordenação do programa.</p>
             <p class="erro" id="erro-pin" hidden></p>
           </div>
           <button type="submit" class="botao-principal">Liberar acesso</button>
         </form>
       </div>
 
-      <!-- 2. PAINEL LIBERADO (Aparece após autenticar) -->
+      <!-- PAINEL LIBERADO -->
       <div id="painel-coord" hidden>
         <div class="cabecalho-coord">
           <div>
             <h2>Próxima rota</h2>
-            <p class="intro" id="subtitulo-coord">Demandas que ainda aguardam atendimento, por comunidade.</p>
+            <p class="intro">Demandas que ainda aguardam atendimento, por comunidade.</p>
           </div>
           <div class="sessao-coord">
             <span id="info-coordenador" class="badge-coord"></span>
             <button type="button" id="btn-sair-coord" class="botao-desfazer">Bloquear aba</button>
           </div>
         </div>
-
         <div id="resumo-rota" class="resumo-rota"></div>
         <div id="lista-comunidades" class="lista-comunidades"></div>
       </div>
-
     </section>
-
   </main>
 
   <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
-
   <script src="script.js"></script>
 </body>
 </html>
