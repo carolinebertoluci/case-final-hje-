@@ -378,6 +378,54 @@
     box.hidden = false;
   }
 
+let rascunhoDemanda = null;
+  const painelRevisao = $('#painel-revisao');
+  const listaRevisao = $('#lista-revisao');
+
+  function formatarDataBR(iso) {
+    const p = iso.split('-');
+    return p[2] + '/' + p[1] + '/' + p[0];
+  }
+
+  function formatarSus(num) {
+    if (!num) return 'Não informado';
+    return num.replace(/(\d{3})(\d{4})(\d{4})(\d{4})/, '$1 $2 $3 $4');
+  }
+
+  function abrirRevisao(dados) {
+    rascunhoDemanda = dados;
+    listaRevisao.textContent = '';
+
+    const itens = [
+      { rotulo: 'Comunidade', valor: nomeComunidade(dados.comunidadeId) },
+      { rotulo: 'Tipo de atendimento', valor: rotuloTipo(dados.tipo) },
+      {
+        rotulo: 'Prioridade',
+        valor: dados.prioridade === 'prioritaria' ? 'Prioritária (atender primeiro)' : 'Rotina',
+        destaque: dados.prioridade === 'prioritaria'
+      },
+      { rotulo: 'Paciente', valor: dados.nome },
+      { rotulo: 'Nascimento', valor: formatarDataBR(dados.nascimento) + ' (' + calcularIdade(dados.nascimento) + ' anos)' },
+      { rotulo: 'Cartão SUS', valor: formatarSus(dados.cartaoSus) }
+    ];
+
+    itens.forEach(function (item) {
+      const dt = el('dt', { text: item.rotulo });
+      const dd = el('dd', {
+        class: item.destaque ? 'revisao-prio' : '',
+        text: item.valor
+      });
+      listaRevisao.appendChild(dt);
+      listaRevisao.appendChild(dd);
+    });
+
+    form.hidden = true;
+    painelRevisao.hidden = false;
+    painelRevisao.focus();
+    painelRevisao.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Passo 1: Valida e abre a revisão
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     $('#confirmacao').hidden = true;
@@ -392,26 +440,44 @@
     }
 
     const v = lerValores();
-    const nome = v.nome.replace(/\s+/g, ' ').trim();
-    adicionarDemanda({
+    abrirRevisao({
       comunidadeId: v.comunidade,
       tipo: v.tipo,
       prioridade: v.prioridade,
-      nome: nome,
+      nome: v.nome.replace(/\s+/g, ' ').trim(),
       nascimento: v.nascimento,
       cartaoSus: v.cartaoSus.replace(/\D/g, '')
     });
+  });
 
-    // Limpa os dados do paciente, mas mantém a comunidade (o ACS costuma registrar vários seguidos)
-    const comunidadeAtual = v.comunidade;
+  // Passo 2A: Voltar para corrigir algo no formulário
+  $('#btn-voltar-edicao').addEventListener('click', function () {
+    painelRevisao.hidden = true;
+    form.hidden = false;
+    $('#nome').focus();
+  });
+
+  // Passo 2B: Confirmar e gravar definitivamente
+  $('#btn-confirmar-envio').addEventListener('click', function () {
+    if (!rascunhoDemanda) return;
+
+    const dados = rascunhoDemanda;
+    adicionarDemanda(dados);
+    rascunhoDemanda = null;
+
+    // Reseta o formulário mantendo a comunidade selecionada
+    const comunidadeAtual = dados.comunidadeId;
     form.reset();
     selComunidade.value = comunidadeAtual;
     ordemCampos.forEach(function (n) { mostrarErro(n, ''); });
     atualizarAjudaComunidade();
 
+    painelRevisao.hidden = true;
+    form.hidden = false;
+
     const conf = $('#confirmacao');
-    conf.textContent = 'Pronto! A demanda de ' + nome + ' (' + rotuloTipo(v.tipo) + ', ' +
-      (v.prioridade === 'prioritaria' ? 'prioritária' : 'rotina') + ') foi registrada em ' +
+    conf.textContent = 'Pronto! A demanda de ' + dados.nome + ' (' + rotuloTipo(dados.tipo) + ', ' +
+      (dados.prioridade === 'prioritaria' ? 'prioritária' : 'rotina') + ') foi registrada em ' +
       nomeComunidade(comunidadeAtual) + '. Você já pode registrar outra.';
     conf.hidden = false;
     conf.focus();
@@ -627,7 +693,7 @@
       avisar('Aba de coordenação bloqueada.');
     });
   }
-  
+
   // Marcar como atendida / desfazer, sem recarregar a página
   $('#lista-comunidades').addEventListener('click', function (e) {
     const botao = e.target.closest('button[data-acao]');

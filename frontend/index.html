@@ -86,8 +86,21 @@
           </div>
         </fieldset>
 
-        <button type="submit" class="botao-principal">Registrar demanda</button>
+        <button type="submit" class="botao-principal">Revisar dados</button>
       </form>
+
+      <!-- ETAPA DE REVISÃO ANTES DO ENVIO -->
+      <div id="painel-revisao" class="painel-revisao" tabindex="-1" hidden>
+        <h3>Confira os dados antes de enviar</h3>
+        <p class="ajuda">Verifique se as informações do paciente e a prioridade estão corretas.</p>
+
+        <dl id="lista-revisao" class="lista-revisao"></dl>
+
+        <div class="acoes-revisao">
+          <button type="button" id="btn-voltar-edicao" class="botao-desfazer">Voltar e editar</button>
+          <button type="button" id="btn-confirmar-envio" class="botao-principal">Confirmar e registrar</button>
+        </div>
+      </div>
     </section>
 
     <!-- TELA DA COORDENAÇÃO -->

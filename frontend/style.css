@@ -507,3 +507,46 @@ input[type="password"]:focus {
   padding: .45rem .9rem; border-radius: 999px;
   border: 1px solid rgba(14, 117, 129, .25);
 }
+
+/* =============== REVISÃO ANTES DO ENVIO =============== */
+.painel-revisao {
+  position: relative; overflow: hidden;
+  max-width: 46rem;
+  background: var(--superficie);
+  border: 1px solid var(--linha);
+  border-radius: 22px;
+  padding: 2rem;
+  box-shadow: var(--sombra-card);
+}
+.painel-revisao::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 6px;
+  background: linear-gradient(90deg, var(--primaria), var(--prio-borda));
+}
+.painel-revisao h3 { font-size: 1.45rem; color: var(--petroleo-900); margin-bottom: .25rem; }
+
+.lista-revisao {
+  display: grid; grid-template-columns: 11rem 1fr; gap: .65rem 1rem;
+  margin: 1.5rem 0 1.75rem; padding: 1.1rem 1.25rem;
+  background: #f8fbfb; border: 1.5px solid var(--linha); border-radius: 16px;
+}
+.lista-revisao dt { font-weight: 700; color: var(--tinta-suave); }
+.lista-revisao dd { margin: 0; font-weight: 700; color: var(--tinta); }
+
+.lista-revisao dd.revisao-prio {
+  display: inline-block; justify-self: start;
+  padding: .2rem .75rem; border-radius: 999px;
+  background: var(--prio-fundo); color: var(--prio-texto);
+  border: 1.5px solid var(--prio-borda);
+}
+
+.acoes-revisao {
+  display: flex; flex-wrap: wrap; gap: .85rem; justify-content: flex-end;
+}
+.acoes-revisao .botao-desfazer { min-height: 3.4rem; padding: .9rem 1.5rem; border-radius: 14px; }
+
+@media (max-width: 40rem) {
+  .lista-revisao { grid-template-columns: 1fr; gap: .2rem; }
+  .lista-revisao dt:not(:first-child) { margin-top: .65rem; }
+  .acoes-revisao { flex-direction: column-reverse; }
+  .acoes-revisao button { width: 100%; }
+}
