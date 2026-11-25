@@ -260,6 +260,52 @@ def marcar_atendida(demanda_id):
       200,
   )
 
+@app.get('/api/comunidades/<comunidade_id>/resumo')
+def resumo_comunidade(comunidade_id):
+  comunidade = buscar_comunidade(comunidade_id)
+  if not comunidade:
+    return jsonify({'erro': 'Comunidade não encontrada.'}), 404
+
+  abertas = [
+      d
+      for d in DEMANDAS
+      if d['comunidade_id'] == comunidade_id and not d['atendida']
+  ]
+
+  por_tipo = {}
+  for t in sorted(TIPOS_VALIDOS):
+    do_tipo = [d for d in abertas if d['tipo'] == t]
+    por_tipo[t] = {
+        'total': len(do_tipo),
+        'prioritarias': sum(
+            1 for d in do_tipo if d['prioridade'] == 'prioritaria'
+        ),
+        'rotina': sum(1 for d in do_tipo if d['prioridade'] == 'rotina'),
+    }
+
+  return (
+      jsonify({
+          'comunidade_id': comunidade['id'],
+          'comunidade_nome': comunidade['nome'],
+          'proxima_visita': comunidade['proxima_visita'],
+          'inacessivel_seca': comunidade['inacessivel_seca'],
+          'total_abertas': len(abertas),
+          'total_prioritarias': sum(
+              1 for d in abertas if d['prioridade'] == 'prioritaria'
+          ),
+          'contingencia_urgente': sum(
+              1 for d in abertas if d['modalidade'] == 'teleconsulta_urgente'
+          ),
+          'fila_seca': sum(
+              1 for d in abertas if d['modalidade'] == 'fila_seca'
+          ),
+          'redirecionadas_polo': sum(
+              1 for d in abertas if d['modalidade'] == 'polo'
+          ),
+          'por_tipo': por_tipo,
+      }),
+      200,
+  )
 
 if __name__ == '__main__':
   app.run(debug=True, port=5000)
